@@ -1,0 +1,1747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>游泳学员管理台账</title>
+
+  <!-- TailwindCSS 通过 CDN 引入，无需安装 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Tesseract.js：纯前端 OCR 文字识别库，支持中文，无需后端 -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+
+  <!-- 自定义 Tailwind 主题：游泳清爽浅蓝色调 -->
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            // 主色调：清爽的水蓝色
+            swim: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              200: '#bae6fd',
+              300: '#7dd3fc',
+              400: '#38bdf8',
+              500: '#0ea5e9',
+              600: '#0284c7',
+              700: '#0369a1',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* 全局字体与背景渐变，营造清爽水波感 */
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: linear-gradient(135deg, #f0f9ff 0%, #e0f7fa 50%, #f0f9ff 100%);
+      min-height: 100vh;
+    }
+    /* 表格行悬停效果 */
+    tbody tr:hover {
+      background-color: #f0f9ff;
+    }
+    /* 弹窗进入动画 */
+    .modal-enter {
+      animation: modalIn 0.2s ease-out;
+    }
+    @keyframes modalIn {
+      from { opacity: 0; transform: translateY(10px) scale(0.98); }
+      to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    /* 隐藏数字输入框的上下箭头，更简洁 */
+    input[type=number]::-webkit-inner-spin-button,
+    input[type=number]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+  </style>
+</head>
+
+<body class="text-slate-700">
+
+  <!-- ============ 顶部标题栏 ============ -->
+  <header class="bg-gradient-to-r from-swim-500 to-swim-400 text-white shadow-lg">
+    <div class="max-w-6xl mx-auto px-4 py-5 flex items-center gap-3">
+      <!-- 泳池波浪图标（SVG） -->
+      <div class="bg-white/20 rounded-2xl p-2.5">
+        <svg class="w-8 h-8" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M2 12c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M2 17c2 0 2-2 4-2s2 2 4 2 2-2 4-2 2 2 4 2 2-2 4-2M6 7a3 3 0 116 0 3 3 0 01-6 0z" />
+        </svg>
+      </div>
+      <div>
+        <h1 class="text-xl sm:text-2xl font-bold">游泳学员管理台账</h1>
+        <p class="text-swim-50 text-xs sm:text-sm">学员信息 · 课时记录 · 工资计算 · 一键导出</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-4 py-6">
+
+    <!-- ============ 数据统计卡片 ============ -->
+    <section class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-swim-100">
+        <p class="text-xs text-slate-400">学员总数</p>
+        <p class="text-2xl font-bold text-swim-600 mt-1" id="statTotal">0</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-swim-100">
+        <p class="text-xs text-slate-400">班级数量</p>
+        <p class="text-2xl font-bold text-swim-600 mt-1" id="statClass">0</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-swim-100">
+        <p class="text-xs text-slate-400">累计已上课时</p>
+        <p class="text-2xl font-bold text-swim-600 mt-1" id="statUsed">0</p>
+      </div>
+      <div class="bg-white rounded-2xl p-4 shadow-sm border border-swim-100">
+        <p class="text-xs text-slate-400">剩余总课时</p>
+        <p class="text-2xl font-bold text-swim-600 mt-1" id="statRemain">0</p>
+      </div>
+    </section>
+
+    <!-- ============ 工具栏：筛选 / 搜索 / 新增 / 工资 / 导出 ============ -->
+    <section class="bg-white rounded-2xl shadow-sm border border-swim-100 p-4 mb-6">
+      <div class="flex flex-col sm:flex-row gap-3 sm:items-center">
+        <!-- 班级筛选下拉 -->
+        <div class="flex-1">
+          <label class="text-xs text-slate-400 block mb-1">按班级筛选</label>
+          <select id="filterClass" class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400 bg-white">
+            <option value="">全部班级</option>
+          </select>
+        </div>
+        <!-- 姓名搜索 -->
+        <div class="flex-1">
+          <label class="text-xs text-slate-400 block mb-1">搜索学员姓名</label>
+          <input type="text" id="searchName" placeholder="输入姓名关键字"
+            class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+        </div>
+        <!-- 操作按钮 -->
+        <div class="flex gap-2 sm:items-end flex-wrap">
+          <button onclick="openOcrModal()"
+            class="flex-1 sm:flex-none bg-violet-100 text-violet-700 font-medium rounded-xl px-4 py-2 hover:bg-violet-200 transition flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            拍照识别
+          </button>
+          <button onclick="openSalaryModal()"
+            class="flex-1 sm:flex-none bg-amber-100 text-amber-700 font-medium rounded-xl px-4 py-2 hover:bg-amber-200 transition flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            算工资
+          </button>
+          <button onclick="exportExcel()"
+            class="flex-1 sm:flex-none bg-swim-100 text-swim-700 font-medium rounded-xl px-4 py-2 hover:bg-swim-200 transition flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            导出Excel
+          </button>
+          <button onclick="openModal()"
+            class="flex-1 sm:flex-none bg-swim-500 text-white font-medium rounded-xl px-4 py-2 hover:bg-swim-600 transition flex items-center justify-center gap-1.5">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/></svg>
+            新增学员
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 桌面端：数据表格 ============ -->
+    <section class="bg-white rounded-2xl shadow-sm border border-swim-100 overflow-hidden hidden md:block">
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="bg-swim-50 text-swim-700 text-left">
+              <th class="px-4 py-3 font-medium">序号</th>
+              <th class="px-4 py-3 font-medium">上课时间段</th>
+              <th class="px-4 py-3 font-medium">班级编号</th>
+              <th class="px-4 py-3 font-medium">学生姓名</th>
+              <th class="px-4 py-3 font-medium">家长电话</th>
+              <th class="px-4 py-3 font-medium">教练</th>
+              <th class="px-4 py-3 font-medium text-center">总课时</th>
+              <th class="px-4 py-3 font-medium text-center">已上课时</th>
+              <th class="px-4 py-3 font-medium text-center">剩余课时</th>
+              <th class="px-4 py-3 font-medium text-center">操作</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-swim-50"></tbody>
+        </table>
+      </div>
+      <!-- 空状态 -->
+      <div id="emptyState" class="hidden py-16 text-center text-slate-400">
+        <svg class="w-16 h-16 mx-auto mb-3 text-swim-200" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"/></svg>
+        <p>暂无学员数据，点击「新增学员」开始记录</p>
+      </div>
+    </section>
+
+    <!-- ============ 手机端：卡片列表 ============ -->
+    <section class="space-y-3 md:hidden" id="cardList"></section>
+    <div id="emptyStateMobile" class="hidden md:hidden py-16 text-center text-slate-400 bg-white rounded-2xl border border-swim-100">
+      <p>暂无学员数据，点击「新增学员」开始记录</p>
+    </div>
+
+  </main>
+
+  <!-- ============ 新增/编辑学员弹窗 ============ -->
+  <div id="modal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <!-- 遮罩 -->
+    <div class="absolute inset-0 bg-slate-900/40" onclick="closeModal()"></div>
+    <!-- 弹窗主体 -->
+    <div class="relative bg-white w-full sm:max-w-lg sm:rounded-2xl rounded-t-2xl shadow-xl modal-enter max-h-[90vh] overflow-y-auto">
+      <div class="sticky top-0 bg-white border-b border-swim-100 px-5 py-4 flex items-center justify-between sm:rounded-t-2xl rounded-t-2xl">
+        <h2 class="text-lg font-bold text-slate-700" id="modalTitle">新增学员</h2>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+      <form id="studentForm" class="p-5 space-y-4" onsubmit="saveStudent(event)">
+        <!-- 隐藏字段：编辑时存放学员ID -->
+        <input type="hidden" id="studentId" />
+
+        <div class="grid grid-cols-2 gap-4">
+          <!-- 上课时间段（选填） -->
+          <div class="col-span-2">
+            <label class="text-sm text-slate-500 block mb-1">上课时间段 <span class="text-xs text-slate-300">（选填）</span></label>
+            <input type="text" id="classTime" placeholder="如：周六 9:00-10:00"
+              class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+          </div>
+          <!-- 班级编号（选填） -->
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">班级编号 <span class="text-xs text-slate-300">（选填）</span></label>
+            <input type="text" id="classNo" placeholder="如：A1" list="classNoList"
+              class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+            <datalist id="classNoList"></datalist>
+          </div>
+          <!-- 学生姓名 -->
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">学生姓名 <span class="text-red-400">*</span></label>
+            <input type="text" id="studentName" placeholder="如：张小明" required
+              class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+          </div>
+          <!-- 家长电话（选填） -->
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">家长电话 <span class="text-xs text-slate-300">（选填）</span></label>
+            <input type="tel" id="parentPhone" placeholder="如：13800138000"
+              class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+          </div>
+          <!-- 授课教练 -->
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">授课教练 <span class="text-red-400">*</span></label>
+            <input type="text" id="coachName" placeholder="如：李教练" required
+              class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+          </div>
+          <!-- 总购买课时 -->
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">总购买课时 <span class="text-red-400">*</span></label>
+            <input type="number" id="totalHours" placeholder="如：20" required min="0" step="1"
+              class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+          </div>
+          <!-- 已上课时（编辑时使用） -->
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">已上课时</label>
+            <input type="number" id="usedHours" placeholder="0" min="0" step="1"
+              class="w-full border border-swim-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-swim-400" />
+          </div>
+        </div>
+
+        <!-- 弹窗底部按钮 -->
+        <div class="flex gap-3 pt-2">
+          <button type="button" onclick="closeModal()"
+            class="flex-1 border border-slate-200 text-slate-500 rounded-xl py-2.5 hover:bg-slate-50 transition">取消</button>
+          <button type="submit"
+            class="flex-1 bg-swim-500 text-white rounded-xl py-2.5 hover:bg-swim-600 transition font-medium">保存</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============ 工资计算弹窗 ============ -->
+  <div id="salaryModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <!-- 遮罩 -->
+    <div class="absolute inset-0 bg-slate-900/40" onclick="closeSalaryModal()"></div>
+    <!-- 弹窗主体 -->
+    <div class="relative bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl shadow-xl modal-enter max-h-[92vh] overflow-y-auto">
+      <div class="sticky top-0 bg-white border-b border-swim-100 px-5 py-4 flex items-center justify-between sm:rounded-t-2xl rounded-t-2xl z-10">
+        <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
+          <svg class="w-5 h-5 text-amber-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+          工资计算
+        </h2>
+        <button onclick="closeSalaryModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5">
+        <!-- 说明 -->
+        <p class="text-xs text-slate-400 mb-4 bg-amber-50 rounded-xl p-3">
+          按教练汇总已上课时，设置每课时单价，自动计算应发工资。单价设置会自动保存，下次打开无需重填。
+        </p>
+
+        <!-- 教练工资表格 -->
+        <div class="overflow-x-auto rounded-xl border border-slate-100 mb-4">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="bg-amber-50 text-amber-700">
+                <th class="px-3 py-2.5 text-left font-medium">教练</th>
+                <th class="px-3 py-2.5 text-center font-medium">已上课时</th>
+                <th class="px-3 py-2.5 text-center font-medium">课时单价(元)</th>
+                <th class="px-3 py-2.5 text-right font-medium">应发工资(元)</th>
+              </tr>
+            </thead>
+            <tbody id="salaryTableBody" class="divide-y divide-slate-50"></tbody>
+          </table>
+        </div>
+
+        <!-- 合计 -->
+        <div class="bg-gradient-to-r from-amber-50 to-amber-100 rounded-xl p-4 mb-4 flex items-center justify-between">
+          <span class="text-slate-600 text-sm">合计应发工资</span>
+          <span class="text-2xl font-bold text-amber-600" id="salaryTotal">¥0</span>
+        </div>
+
+        <!-- 空状态 -->
+        <div id="salaryEmpty" class="hidden py-10 text-center text-slate-400">
+          <p>暂无教练数据，请先添加学员信息</p>
+        </div>
+
+        <!-- 底部按钮 -->
+        <div class="flex gap-3">
+          <button onclick="closeSalaryModal()"
+            class="flex-1 border border-slate-200 text-slate-500 rounded-xl py-2.5 hover:bg-slate-50 transition">关闭</button>
+          <button onclick="exportSalary()"
+            class="flex-1 bg-amber-500 text-white rounded-xl py-2.5 hover:bg-amber-600 transition font-medium">导出工资单</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ OCR 拍照识别弹窗 ============ -->
+  <div id="ocrModal" class="hidden fixed inset-0 z-50 flex items-end sm:items-center justify-center">
+    <!-- 遮罩 -->
+    <div class="absolute inset-0 bg-slate-900/40" onclick="closeOcrModal()"></div>
+    <!-- 弹窗主体 -->
+    <div class="relative bg-white w-full sm:max-w-2xl sm:rounded-2xl rounded-t-2xl shadow-xl modal-enter max-h-[92vh] overflow-y-auto">
+      <div class="sticky top-0 bg-white border-b border-swim-100 px-5 py-4 flex items-center justify-between sm:rounded-t-2xl rounded-t-2xl z-10">
+        <h2 class="text-lg font-bold text-slate-700 flex items-center gap-2">
+          <svg class="w-5 h-5 text-violet-500" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+          拍照识别名单
+        </h2>
+        <button onclick="closeOcrModal()" class="text-slate-400 hover:text-slate-600 p-1">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
+        </button>
+      </div>
+
+      <div class="p-5">
+        <!-- 第一步：选择/拍摄图片 -->
+        <div id="ocrStep1">
+          <p class="text-xs text-slate-400 mb-4 bg-violet-50 rounded-xl p-3">
+            拍一张A4纸名单照片，系统会自动识别并分类学员姓名、销售姓名、电话。识别后可手动编辑再批量导入。拍照时请尽量正对纸面、光线均匀、文字清晰。
+          </p>
+          <!-- 图片预览区 -->
+          <div id="ocrPreviewWrap" class="hidden mb-4">
+            <div class="relative">
+              <img id="ocrPreview" class="w-full rounded-xl border border-violet-100 max-h-60 object-contain bg-slate-50" alt="名单预览" />
+              <!-- 旋转按钮 -->
+              <div class="absolute top-2 right-2 flex gap-1">
+                <button onclick="rotateOcrImage(-90)" title="向左旋转"
+                  class="bg-white/90 backdrop-blur text-slate-600 rounded-lg p-2 shadow hover:bg-white transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"/></svg>
+                </button>
+                <button onclick="rotateOcrImage(90)" title="向右旋转"
+                  class="bg-white/90 backdrop-blur text-slate-600 rounded-lg p-2 shadow hover:bg-white transition">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M21 10H11a8 8 0 00-8 8v2m18-10l-6 6m6-6l-6-6"/></svg>
+                </button>
+              </div>
+            </div>
+            <!-- 图片优化选项 -->
+            <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="ocrEnhance" checked class="rounded text-violet-500 focus:ring-violet-400" />
+                自动增强图片（提高识别率）
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <span>识别模式</span>
+                <select id="ocrPsmMode" class="border border-violet-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-violet-400">
+                  <option value="6">名单/表格（默认）</option>
+                  <option value="4">单列名单</option>
+                  <option value="3">自动检测</option>
+                  <option value="11">密集文字</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <!-- 选择图片按钮 -->
+          <input type="file" id="ocrFileInput" accept="image/*" capture="environment" class="hidden" onchange="onOcrFileSelected(event)" />
+          <div class="flex gap-3">
+            <button onclick="document.getElementById('ocrFileInput').click()"
+              class="flex-1 bg-violet-500 text-white rounded-xl py-2.5 hover:bg-violet-600 transition font-medium flex items-center justify-center gap-1.5">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+              拍照 / 选择图片
+            </button>
+            <button id="ocrStartBtn" onclick="startOcr()" class="hidden flex-1 bg-swim-500 text-white rounded-xl py-2.5 hover:bg-swim-600 transition font-medium">
+              开始识别
+            </button>
+          </div>
+        </div>
+
+        <!-- 识别中：进度条 -->
+        <div id="ocrStep2" class="hidden py-10 text-center">
+          <div class="inline-block w-12 h-12 border-4 border-violet-200 border-t-violet-500 rounded-full animate-spin mb-4"></div>
+          <p class="text-slate-500 text-sm" id="ocrProgressText">正在识别中，请稍候...</p>
+          <div class="mt-3 mx-auto max-w-xs bg-violet-100 rounded-full h-2 overflow-hidden">
+            <div id="ocrProgressBar" class="bg-violet-500 h-2 rounded-full transition-all duration-300" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- 第三步：识别结果分类 + 批量导入 -->
+        <div id="ocrStep3" class="hidden">
+          <!-- 原始识别文本（可展开查看全部） -->
+          <div class="mb-4">
+            <button onclick="toggleRawText()" class="text-xs text-violet-600 flex items-center gap-1">
+              <svg id="rawTextArrow" class="w-3 h-3 transition-transform" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></svg>
+              查看原始识别文本
+            </button>
+            <textarea id="ocrRawText" rows="6" placeholder="原始识别结果..."
+              class="hidden mt-2 w-full border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400 text-xs font-mono bg-slate-50"></textarea>
+          </div>
+
+          <!-- 分类结果 -->
+          <p class="text-xs text-slate-400 mb-3">系统已自动分类，请核对后导入（可逐行编辑）：</p>
+
+          <!-- 姓名分类 -->
+          <div class="mb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="bg-green-100 text-green-700 text-xs font-medium px-2 py-0.5 rounded-full">学员姓名</span>
+              <span id="catNameCount" class="text-xs text-slate-400">0 个</span>
+              <span class="text-xs text-slate-300">（将导入的学员）</span>
+            </div>
+            <textarea id="catNames" rows="5" placeholder="学员姓名会显示在这里..."
+              class="w-full border border-green-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-green-400 text-sm"></textarea>
+          </div>
+
+          <!-- 销售姓名分类 -->
+          <div class="mb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="bg-amber-100 text-amber-700 text-xs font-medium px-2 py-0.5 rounded-full">销售姓名</span>
+              <span id="catSalesNameCount" class="text-xs text-slate-400">0 个</span>
+              <span class="text-xs text-slate-300">（含"销售/顾问/经理"等关键词的行，不导入）</span>
+            </div>
+            <textarea id="catSalesNames" rows="3" placeholder="销售人员姓名会显示在这里（仅供参考）..."
+              class="w-full border border-amber-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-amber-400 text-sm bg-amber-50/30"></textarea>
+          </div>
+
+          <!-- 电话分类 -->
+          <div class="mb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="bg-blue-100 text-blue-700 text-xs font-medium px-2 py-0.5 rounded-full">电话</span>
+              <span id="catPhoneCount" class="text-xs text-slate-400">0 个</span>
+              <span class="text-xs text-slate-300">（如名单上有电话会自动提取）</span>
+            </div>
+            <textarea id="catPhones" rows="3" placeholder="电话会显示在这里（如有）..."
+              class="w-full border border-blue-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-400 text-sm"></textarea>
+          </div>
+
+          <!-- 其他内容 -->
+          <div class="mb-4">
+            <div class="flex items-center gap-2 mb-2">
+              <span class="bg-slate-100 text-slate-500 text-xs font-medium px-2 py-0.5 rounded-full">其他</span>
+              <span id="catOtherCount" class="text-xs text-slate-400">0 行</span>
+              <span class="text-xs text-slate-300">（未识别为姓名/电话的内容，可忽略）</span>
+            </div>
+            <textarea id="catOthers" rows="3" placeholder="其他内容..."
+              class="w-full border border-slate-200 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-slate-300 text-sm bg-slate-50"></textarea>
+          </div>
+
+          <!-- 智能配对提示 -->
+          <div id="pairHint" class="hidden mb-4 bg-violet-50 rounded-xl p-3 text-xs text-violet-600">
+            检测到学员姓名和电话数量一致，将自动配对导入（第1个姓名配第1个电话，以此类推）。
+          </div>
+
+          <!-- 批量导入的公共信息 -->
+          <div class="mt-4 bg-violet-50 rounded-xl p-4">
+            <p class="text-sm font-medium text-violet-700 mb-3">为这些学员统一填写以下信息：</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div class="col-span-2">
+                <label class="text-xs text-slate-400 block mb-1">上课时间段</label>
+                <input type="text" id="ocrClassTime" placeholder="如：周六 9:00-10:00"
+                  class="w-full border border-violet-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">班级编号 <span class="text-red-400">*</span></label>
+                <input type="text" id="ocrClassNo" placeholder="如：A1" required
+                  class="w-full border border-violet-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">授课教练 <span class="text-red-400">*</span></label>
+                <input type="text" id="ocrCoachName" placeholder="如：李教练" required
+                  class="w-full border border-violet-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">总购买课时</label>
+                <input type="number" id="ocrTotalHours" placeholder="如：20" min="0" value="20"
+                  class="w-full border border-violet-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400 text-sm" />
+              </div>
+              <div>
+                <label class="text-xs text-slate-400 block mb-1">家长电话（选填）</label>
+                <input type="tel" id="ocrParentPhone" placeholder="名单有电话则自动配对，否则用此"
+                  class="w-full border border-violet-200 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-violet-400 text-sm" />
+              </div>
+            </div>
+          </div>
+
+          <!-- 底部按钮 -->
+          <div class="flex gap-3 mt-4">
+            <button onclick="resetOcr()" class="flex-1 border border-slate-200 text-slate-500 rounded-xl py-2.5 hover:bg-slate-50 transition">重新识别</button>
+            <button onclick="batchImport()" class="flex-1 bg-violet-500 text-white rounded-xl py-2.5 hover:bg-violet-600 transition font-medium">批量导入</button>
+          </div>
+        </div>
+
+        <!-- 关闭按钮（第一步时显示） -->
+        <div id="ocrCloseWrap" class="flex gap-3 mt-4">
+          <button onclick="closeOcrModal()" class="flex-1 border border-slate-200 text-slate-500 rounded-xl py-2.5 hover:bg-slate-50 transition">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ============ 轻提示 Toast ============ -->
+  <div id="toast" class="hidden fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-800 text-white text-sm px-5 py-2.5 rounded-full shadow-lg z-50"></div>
+
+  <!-- ============ 加载遮罩 ============ -->
+  <div id="loadingOverlay" class="hidden fixed inset-0 bg-black/30 flex items-center justify-center z-50">
+    <div class="bg-white rounded-2xl px-6 py-4 flex items-center gap-3 shadow-xl">
+      <svg class="animate-spin h-5 w-5 text-cyan-500" viewBox="0 0 24 24" fill="none">
+        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"/>
+        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"/>
+      </svg>
+      <span class="text-slate-600 text-sm font-medium">同步中...</span>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================
+       游泳学员管理台账 - 核心逻辑
+       数据通过飞书多维表格云端同步，跨设备共享
+       ========================================================= */
+
+    // ====== 飞书云同步配置 ======
+    // API 代理地址：部署到 Vercel 后改为你的域名，如 https://your-app.vercel.app/api/students
+    // 本地调试时用相对路径即可
+    const API_URL = '/api/students';
+
+    // 全部学员数据（数组，从飞书云端加载）
+    let students = [];
+    // 各教练的课时单价（对象：{ "李教练": 100, "王教练": 120 }）
+    // 单价属于本地偏好设置，仍存在 localStorage
+    const SALARY_KEY = 'swim_salary_rates';
+    let salaryRates = {};
+
+    /* ---------- 数据读写（飞书云端） ---------- */
+
+    // 从飞书云端拉取全部学员数据
+    async function loadData() {
+      try {
+        showLoading(true);
+        const resp = await fetch(API_URL);
+        const result = await resp.json();
+        if (result.ok) {
+          students = result.data || [];
+        } else {
+          console.error('加载数据失败:', result.error);
+          showToast('加载数据失败，请检查网络');
+          students = [];
+        }
+      } catch (err) {
+        console.error('加载数据失败:', err);
+        showToast('无法连接服务器');
+        students = [];
+      } finally {
+        showLoading(false);
+      }
+      // 单价设置仍从本地读取
+      const ratesRaw = localStorage.getItem(SALARY_KEY);
+      salaryRates = ratesRaw ? JSON.parse(ratesRaw) : {};
+      // 数据加载完成后重新渲染
+      render();
+    }
+
+    // 保存课时单价设置到 LocalStorage（本地偏好）
+    function saveRates() {
+      localStorage.setItem(SALARY_KEY, JSON.stringify(salaryRates));
+    }
+
+    // 显示/隐藏加载状态
+    function showLoading(show) {
+      const el = document.getElementById('loadingOverlay');
+      if (el) el.classList.toggle('hidden', !show);
+    }
+
+    /* ---------- 筛选与搜索 ---------- */
+
+    // 根据当前筛选条件返回要展示的学员列表
+    function getFilteredStudents() {
+      const filterClass = document.getElementById('filterClass').value;
+      const keyword = document.getElementById('searchName').value.trim().toLowerCase();
+      return students.filter(s => {
+        const matchClass = !filterClass || s.classNo === filterClass;
+        const matchName = !keyword || s.studentName.toLowerCase().includes(keyword);
+        return matchClass && matchName;
+      });
+    }
+
+    /* ---------- 渲染 ---------- */
+
+    // 主渲染函数：刷新统计、筛选选项、表格、卡片
+    function render() {
+      renderStats();
+      renderClassFilter();
+      renderTable();
+      renderCards();
+    }
+
+    // 渲染顶部统计卡片
+    function renderStats() {
+      document.getElementById('statTotal').textContent = students.length;
+      const classes = [...new Set(students.map(s => s.classNo))];
+      document.getElementById('statClass').textContent = classes.length;
+      document.getElementById('statUsed').textContent = students.reduce((sum, s) => sum + (Number(s.usedHours) || 0), 0);
+      document.getElementById('statRemain').textContent = students.reduce((sum, s) => sum + getRemain(s), 0);
+    }
+
+    // 计算剩余课时 = 总课时 - 已上课时
+    function getRemain(s) {
+      return (Number(s.totalHours) || 0) - (Number(s.usedHours) || 0);
+    }
+
+    // 渲染班级筛选下拉框（去重）
+    function renderClassFilter() {
+      const select = document.getElementById('filterClass');
+      const current = select.value;
+      const classes = [...new Set(students.map(s => s.classNo))].sort();
+      select.innerHTML = '<option value="">全部班级</option>' +
+        classes.map(c => `<option value="${c}">${c}</option>`).join('');
+      select.value = current;
+
+      // 同步填充班级编号的 datalist（输入时自动补全）
+      document.getElementById('classNoList').innerHTML =
+        classes.map(c => `<option value="${c}">`).join('');
+    }
+
+    // 渲染桌面端表格
+    function renderTable() {
+      const list = getFilteredStudents();
+      const tbody = document.getElementById('tableBody');
+      const empty = document.getElementById('emptyState');
+
+      if (list.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+
+      tbody.innerHTML = list.map((s, i) => {
+        const remain = getRemain(s);
+        // 剩余课时不足时高亮提醒
+        const remainClass = remain <= 3 ? 'text-red-500 font-bold' : 'text-swim-600 font-semibold';
+        return `
+          <tr>
+            <td class="px-4 py-3 text-slate-400">${i + 1}</td>
+            <td class="px-4 py-3">${escapeHtml(s.classTime)}</td>
+            <td class="px-4 py-3"><span class="bg-swim-100 text-swim-700 px-2 py-0.5 rounded-lg text-xs">${escapeHtml(s.classNo)}</span></td>
+            <td class="px-4 py-3 font-medium text-slate-700">${escapeHtml(s.studentName)}</td>
+            <td class="px-4 py-3 text-slate-500">${escapeHtml(s.parentPhone)}</td>
+            <td class="px-4 py-3 text-slate-500">${escapeHtml(s.coachName)}</td>
+            <td class="px-4 py-3 text-center">${s.totalHours}</td>
+            <td class="px-4 py-3 text-center">${s.usedHours}</td>
+            <td class="px-4 py-3 text-center ${remainClass}">${remain}</td>
+            <td class="px-4 py-3">
+              <div class="flex items-center justify-center gap-1">
+                <button onclick="addCourse('${s.id}')" title="上课+1课时"
+                  class="bg-green-100 text-green-600 hover:bg-green-200 rounded-lg px-2 py-1 text-xs font-medium transition whitespace-nowrap">上课+1</button>
+                <button onclick="openModal('${s.id}')" title="编辑"
+                  class="bg-swim-100 text-swim-600 hover:bg-swim-200 rounded-lg px-2 py-1 text-xs font-medium transition">编辑</button>
+                <button onclick="deleteStudent('${s.id}')" title="删除"
+                  class="bg-red-100 text-red-500 hover:bg-red-200 rounded-lg px-2 py-1 text-xs font-medium transition">删除</button>
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+    }
+
+    // 渲染手机端卡片
+    function renderCards() {
+      const list = getFilteredStudents();
+      const cardList = document.getElementById('cardList');
+      const empty = document.getElementById('emptyStateMobile');
+
+      if (list.length === 0) {
+        cardList.innerHTML = '';
+        empty.classList.remove('hidden');
+        return;
+      }
+      empty.classList.add('hidden');
+
+      cardList.innerHTML = list.map((s, i) => {
+        const remain = getRemain(s);
+        const remainClass = remain <= 3 ? 'text-red-500' : 'text-swim-600';
+        return `
+          <div class="bg-white rounded-2xl shadow-sm border border-swim-100 p-4">
+            <div class="flex items-start justify-between mb-2">
+              <div>
+                <span class="font-bold text-slate-700 text-base">${escapeHtml(s.studentName)}</span>
+                <span class="ml-2 bg-swim-100 text-swim-700 px-2 py-0.5 rounded-lg text-xs">${escapeHtml(s.classNo)}</span>
+              </div>
+              <span class="text-xs text-slate-400">#${i + 1}</span>
+            </div>
+            <div class="grid grid-cols-2 gap-y-1.5 text-sm text-slate-500 mb-3">
+              <div class="col-span-2">🕐 ${escapeHtml(s.classTime)}</div>
+              <div>📞 ${escapeHtml(s.parentPhone)}</div>
+              <div>🏊 ${escapeHtml(s.coachName)}</div>
+            </div>
+            <div class="flex items-center justify-around bg-swim-50 rounded-xl py-2 mb-3 text-center">
+              <div><p class="text-xs text-slate-400">总课时</p><p class="font-semibold">${s.totalHours}</p></div>
+              <div class="w-px h-8 bg-swim-200"></div>
+              <div><p class="text-xs text-slate-400">已上</p><p class="font-semibold">${s.usedHours}</p></div>
+              <div class="w-px h-8 bg-swim-200"></div>
+              <div><p class="text-xs text-slate-400">剩余</p><p class="font-semibold ${remainClass}">${remain}</p></div>
+            </div>
+            <div class="flex gap-2">
+              <button onclick="addCourse('${s.id}')" class="flex-1 bg-green-100 text-green-600 rounded-xl py-2 text-sm font-medium hover:bg-green-200 transition">上课+1</button>
+              <button onclick="openModal('${s.id}')" class="flex-1 bg-swim-100 text-swim-600 rounded-xl py-2 text-sm font-medium hover:bg-swim-200 transition">编辑</button>
+              <button onclick="deleteStudent('${s.id}')" class="flex-1 bg-red-100 text-red-500 rounded-xl py-2 text-sm font-medium hover:bg-red-200 transition">删除</button>
+            </div>
+          </div>`;
+      }).join('');
+    }
+
+    /* ---------- 弹窗（新增/编辑） ---------- */
+
+    // 打开弹窗：不传 id 为新增，传 id 为编辑
+    function openModal(id) {
+      const form = document.getElementById('studentForm');
+      form.reset();
+      document.getElementById('studentId').value = '';
+
+      if (id) {
+        // 编辑模式：填充已有数据
+        const s = students.find(x => x.id === id);
+        if (!s) return;
+        document.getElementById('modalTitle').textContent = '编辑学员';
+        document.getElementById('studentId').value = s.id;
+        document.getElementById('classTime').value = s.classTime;
+        document.getElementById('classNo').value = s.classNo;
+        document.getElementById('studentName').value = s.studentName;
+        document.getElementById('parentPhone').value = s.parentPhone;
+        document.getElementById('coachName').value = s.coachName;
+        document.getElementById('totalHours').value = s.totalHours;
+        document.getElementById('usedHours').value = s.usedHours;
+      } else {
+        document.getElementById('modalTitle').textContent = '新增学员';
+        document.getElementById('usedHours').value = 0;
+      }
+
+      document.getElementById('modal').classList.remove('hidden');
+    }
+
+    // 关闭弹窗
+    function closeModal() {
+      document.getElementById('modal').classList.add('hidden');
+    }
+
+    // 保存学员（新增或更新）— 写入飞书云端
+    async function saveStudent(event) {
+      event.preventDefault();
+      const id = document.getElementById('studentId').value;
+      const data = {
+        classTime: document.getElementById('classTime').value.trim(),
+        classNo: document.getElementById('classNo').value.trim(),
+        studentName: document.getElementById('studentName').value.trim(),
+        parentPhone: document.getElementById('parentPhone').value.trim(),
+        coachName: document.getElementById('coachName').value.trim(),
+        totalHours: Number(document.getElementById('totalHours').value) || 0,
+        usedHours: Number(document.getElementById('usedHours').value) || 0,
+      };
+
+      // 简单校验：已上课时不能超过总课时
+      if (data.usedHours > data.totalHours) {
+        showToast('已上课时不能超过总课时');
+        return;
+      }
+
+      try {
+        showLoading(true);
+        if (id) {
+          // 更新：调用 PUT
+          const resp = await fetch(`${API_URL}?id=${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+          const result = await resp.json();
+          if (!result.ok) throw new Error(result.error);
+          // 更新本地数组
+          const idx = students.findIndex(x => x.id === id);
+          if (idx > -1) students[idx] = { ...students[idx], ...data };
+          showToast('学员信息已更新');
+        } else {
+          // 新增：调用 POST
+          const resp = await fetch(API_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data),
+          });
+          const result = await resp.json();
+          if (!result.ok) throw new Error(result.error);
+          students.push(result.data);
+          showToast('学员已添加');
+        }
+        render();
+        closeModal();
+      } catch (err) {
+        console.error('保存失败:', err);
+        showToast('保存失败: ' + err.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    /* ---------- 课时操作 ---------- */
+
+    // 一键增加一次上课记录（已上课时 +1）— 同步到飞书云端
+    async function addCourse(id) {
+      const s = students.find(x => x.id === id);
+      if (!s) return;
+      if (s.usedHours >= s.totalHours) {
+        showToast(`${s.studentName} 的课时已用完，请先续费`);
+        return;
+      }
+      const newUsed = Number(s.usedHours) + 1;
+      try {
+        showLoading(true);
+        const resp = await fetch(`${API_URL}?id=${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ usedHours: newUsed }),
+        });
+        const result = await resp.json();
+        if (!result.ok) throw new Error(result.error);
+        s.usedHours = newUsed;
+        render();
+        const remain = getRemain(s);
+        showToast(`${s.studentName} 上课+1，剩余 ${remain} 课时`);
+      } catch (err) {
+        console.error('更新课时失败:', err);
+        showToast('更新失败: ' + err.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    /* ---------- 删除 ---------- */
+
+    // 删除学员（带确认）— 从飞书云端删除
+    async function deleteStudent(id) {
+      const s = students.find(x => x.id === id);
+      if (!s) return;
+      if (confirm(`确定要删除学员「${s.studentName}」吗？此操作不可恢复。`)) {
+        try {
+          showLoading(true);
+          const resp = await fetch(`${API_URL}?id=${id}`, { method: 'DELETE' });
+          const result = await resp.json();
+          if (!result.ok) throw new Error(result.error);
+          students = students.filter(x => x.id !== id);
+          render();
+          showToast('已删除学员');
+        } catch (err) {
+          console.error('删除失败:', err);
+          showToast('删除失败: ' + err.message);
+        } finally {
+          showLoading(false);
+        }
+      }
+    }
+
+    /* ---------- 工资计算 ---------- */
+
+    // 打开工资计算弹窗
+    function openSalaryModal() {
+      renderSalaryTable();
+      document.getElementById('salaryModal').classList.remove('hidden');
+    }
+
+    // 关闭工资计算弹窗
+    function closeSalaryModal() {
+      document.getElementById('salaryModal').classList.add('hidden');
+    }
+
+    // 按教练汇总已上课时，返回 [{ coach, hours }, ...]
+    function getCoachSummary() {
+      const map = {};
+      // 统计当前筛选范围内的教练课时
+      getFilteredStudents().forEach(s => {
+        const coach = s.coachName;
+        if (!map[coach]) map[coach] = 0;
+        map[coach] += Number(s.usedHours) || 0;
+      });
+      // 转为数组并按教练名排序
+      return Object.keys(map).sort().map(coach => ({
+        coach: coach,
+        hours: map[coach]
+      }));
+    }
+
+    // 渲染工资计算表格
+    function renderSalaryTable() {
+      const summary = getCoachSummary();
+      const tbody = document.getElementById('salaryTableBody');
+      const empty = document.getElementById('salaryEmpty');
+      const totalEl = document.getElementById('salaryTotal');
+
+      if (summary.length === 0) {
+        tbody.innerHTML = '';
+        empty.classList.remove('hidden');
+        totalEl.textContent = '¥0';
+        return;
+      }
+      empty.classList.add('hidden');
+
+      let totalSalary = 0;
+      tbody.innerHTML = summary.map(item => {
+        // 获取该教练的单价，默认 0
+        const rate = salaryRates[item.coach] || 0;
+        const salary = item.hours * rate;
+        totalSalary += salary;
+        return `
+          <tr>
+            <td class="px-3 py-2.5 font-medium text-slate-700">${escapeHtml(item.coach)}</td>
+            <td class="px-3 py-2.5 text-center text-slate-600">${item.hours}</td>
+            <td class="px-3 py-2.5 text-center">
+              <input type="number" min="0" step="1" value="${rate}" placeholder="0"
+                onchange="updateRate('${escapeHtml(item.coach)}', this.value)"
+                class="w-20 text-center border border-amber-200 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-amber-400" />
+            </td>
+            <td class="px-3 py-2.5 text-right font-semibold text-amber-600">¥${salary.toLocaleString()}</td>
+          </tr>`;
+      }).join('');
+
+      totalEl.textContent = '¥' + totalSalary.toLocaleString();
+    }
+
+    // 更新某个教练的课时单价（实时重算工资）
+    function updateRate(coach, value) {
+      salaryRates[coach] = Number(value) || 0;
+      saveRates();
+      renderSalaryTable();
+    }
+
+    /* ---------- 导出工资单 ---------- */
+
+    // 导出工资单为 Excel 文件
+    function exportSalary() {
+      const summary = getCoachSummary();
+      if (summary.length === 0) {
+        showToast('暂无可导出的工资数据');
+        return;
+      }
+
+      // 构建 HTML 表格，Excel 可直接识别
+      let html = '<table border="1">';
+      html += '<tr style="background:#fef3c7;font-weight:bold;">' +
+        '<th>教练</th><th>已上课时</th><th>课时单价(元)</th><th>应发工资(元)</th>' +
+        '</tr>';
+
+      let totalHours = 0;
+      let totalSalary = 0;
+      summary.forEach(item => {
+        const rate = salaryRates[item.coach] || 0;
+        const salary = item.hours * rate;
+        totalHours += item.hours;
+        totalSalary += salary;
+        html += `<tr>
+          <td>${escapeHtml(item.coach)}</td>
+          <td style="text-align:center;">${item.hours}</td>
+          <td style="text-align:center;">${rate}</td>
+          <td style="text-align:right;">${salary}</td>
+        </tr>`;
+      });
+      // 合计行
+      html += `<tr style="background:#fde68a;font-weight:bold;">
+        <td>合计</td>
+        <td style="text-align:center;">${totalHours}</td>
+        <td></td>
+        <td style="text-align:right;">${totalSalary}</td>
+      </tr>`;
+      html += '</table>';
+
+      // 加 BOM 头确保中文不乱码
+      const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // 文件名带日期
+      const date = new Date();
+      const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+      a.download = `教练工资单_${dateStr}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('已导出工资单');
+    }
+
+    /* ---------- 导出学员名单 Excel ---------- */
+
+    // 将当前筛选后的列表导出为 Excel 文件（无需第三方库）
+    function exportExcel() {
+      const list = getFilteredStudents();
+      if (list.length === 0) {
+        showToast('当前没有可导出的数据');
+        return;
+      }
+
+      // 构建 HTML 表格，Excel 可直接识别
+      let html = '<table border="1">';
+      html += '<tr style="background:#bae6fd;font-weight:bold;">' +
+        '<th>序号</th><th>上课时间段</th><th>班级编号</th><th>学生姓名</th>' +
+        '<th>家长电话</th><th>授课教练</th><th>总购买课时</th><th>已上课时</th><th>剩余课时</th>' +
+        '</tr>';
+      list.forEach((s, i) => {
+        html += `<tr>
+          <td>${i + 1}</td>
+          <td>${escapeHtml(s.classTime)}</td>
+          <td>${escapeHtml(s.classNo)}</td>
+          <td>${escapeHtml(s.studentName)}</td>
+          <td>${escapeHtml(s.parentPhone)}</td>
+          <td>${escapeHtml(s.coachName)}</td>
+          <td>${s.totalHours}</td>
+          <td>${s.usedHours}</td>
+          <td>${getRemain(s)}</td>
+        </tr>`;
+      });
+      html += '</table>';
+
+      // 加 BOM 头确保中文不乱码
+      const blob = new Blob(['\ufeff' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      // 文件名带日期
+      const date = new Date();
+      const dateStr = `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, '0')}${String(date.getDate()).padStart(2, '0')}`;
+      a.download = `学员名单_${dateStr}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('已导出 Excel 文件');
+    }
+
+    /* ---------- OCR 拍照识别 ---------- */
+
+    // 当前选中的图片（始终以 DataURL 形式保存，方便旋转和预处理）
+    let ocrImageDataUrl = null;
+    // 当前旋转角度
+    let ocrRotation = 0;
+
+    // 打开 OCR 弹窗
+    function openOcrModal() {
+      resetOcr();
+      document.getElementById('ocrModal').classList.remove('hidden');
+    }
+
+    // 关闭 OCR 弹窗
+    function closeOcrModal() {
+      document.getElementById('ocrModal').classList.add('hidden');
+    }
+
+    // 重置 OCR 流程到第一步
+    function resetOcr() {
+      ocrImageDataUrl = null;
+      ocrRotation = 0;
+      document.getElementById('ocrFileInput').value = '';
+      document.getElementById('ocrPreviewWrap').classList.add('hidden');
+      document.getElementById('ocrStartBtn').classList.add('hidden');
+      document.getElementById('ocrStep1').classList.remove('hidden');
+      document.getElementById('ocrStep2').classList.add('hidden');
+      document.getElementById('ocrStep3').classList.add('hidden');
+      document.getElementById('ocrCloseWrap').classList.remove('hidden');
+      document.getElementById('ocrProgressBar').style.width = '0%';
+      // 清空分类文本框
+      document.getElementById('ocrRawText').value = '';
+      document.getElementById('catNames').value = '';
+      document.getElementById('catSalesNames').value = '';
+      document.getElementById('catPhones').value = '';
+      document.getElementById('catOthers').value = '';
+    }
+
+    // 用户选择了图片
+    function onOcrFileSelected(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      ocrRotation = 0;
+
+      // 读取为 DataURL 保存（后续旋转和预处理都要用）
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        ocrImageDataUrl = e.target.result;
+        updateOcrPreview();
+        document.getElementById('ocrPreviewWrap').classList.remove('hidden');
+        document.getElementById('ocrStartBtn').classList.remove('hidden');
+      };
+      reader.readAsDataURL(file);
+    }
+
+    // 旋转图片（在 Canvas 上旋转后重新生成 DataURL）
+    function rotateOcrImage(deg) {
+      if (!ocrImageDataUrl) return;
+      ocrRotation = (ocrRotation + deg + 360) % 360;
+
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        // 旋转后宽高互换
+        if (ocrRotation === 90 || ocrRotation === 270) {
+          canvas.width = img.height;
+          canvas.height = img.width;
+        } else {
+          canvas.width = img.width;
+          canvas.height = img.height;
+        }
+        ctx.translate(canvas.width / 2, canvas.height / 2);
+        ctx.rotate(ocrRotation * Math.PI / 180);
+        ctx.drawImage(img, -img.width / 2, -img.height / 2);
+        // 保存旋转后的图片
+        ocrImageDataUrl = canvas.toDataURL('image/jpeg', 0.9);
+        ocrRotation = 0; // 已经 baked 进图片了
+        updateOcrPreview();
+      };
+      img.src = ocrImageDataUrl;
+    }
+
+    // 更新预览图
+    function updateOcrPreview() {
+      document.getElementById('ocrPreview').src = ocrImageDataUrl;
+    }
+
+    // 自动纠偏：检测图片倾斜角度并旋转校正
+    // 原理：对每个候选角度计算水平投影（每行黑像素数），文本行对齐时投影方差最大
+    function deskewImage(canvas, ctx) {
+      const w = canvas.width;
+      const h = canvas.height;
+
+      // 缩小到 500px 宽用于快速检测角度（原图太大计算太慢）
+      const ds = Math.min(1, 500 / w);
+      const sw = Math.max(1, Math.floor(w * ds));
+      const sh = Math.max(1, Math.floor(h * ds));
+
+      const small = document.createElement('canvas');
+      small.width = sw;
+      small.height = sh;
+      const sctx = small.getContext('2d');
+      sctx.drawImage(canvas, 0, 0, sw, sh);
+      const sData = sctx.getImageData(0, 0, sw, sh).data;
+
+      // 灰度 + 简单二值化（用于检测角度，不需要精确）
+      const bin = new Uint8Array(sw * sh);
+      for (let i = 0, j = 0; i < sData.length; i += 4, j++) {
+        const gray = sData[i] * 0.299 + sData[i + 1] * 0.587 + sData[i + 2] * 0.114;
+        bin[j] = gray < 128 ? 1 : 0;
+      }
+
+      // 搜索最佳角度：-20° 到 +20°，步长 1°
+      let bestAngle = 0;
+      let bestScore = -1;
+      const cx = sw / 2;
+      const cy = sh / 2;
+
+      for (let angle = -20; angle <= 20; angle += 1) {
+        const rad = angle * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const rowSums = new Float32Array(sh);
+        for (let y = 0; y < sh; y++) {
+          let sum = 0;
+          for (let x = 0; x < sw; x++) {
+            const rx = Math.round((x - cx) * cos - (y - cy) * sin + cx);
+            const ry = Math.round((x - cx) * sin + (y - cy) * cos + cy);
+            if (rx >= 0 && rx < sw && ry >= 0 && ry < sh && bin[ry * sw + rx]) {
+              sum++;
+            }
+          }
+          rowSums[y] = sum;
+        }
+        // 方差越大 = 行投影越清晰 = 文本行越对齐
+        let mean = 0;
+        for (let y = 0; y < sh; y++) mean += rowSums[y];
+        mean /= sh;
+        let variance = 0;
+        for (let y = 0; y < sh; y++) variance += (rowSums[y] - mean) ** 2;
+        variance /= sh;
+        if (variance > bestScore) {
+          bestScore = variance;
+          bestAngle = angle;
+        }
+      }
+
+      // 精细搜索：最佳角度附近 ±1°，步长 0.2°
+      for (let angle = bestAngle - 1; angle <= bestAngle + 1; angle += 0.2) {
+        const rad = angle * Math.PI / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        const rowSums = new Float32Array(sh);
+        for (let y = 0; y < sh; y++) {
+          let sum = 0;
+          for (let x = 0; x < sw; x++) {
+            const rx = Math.round((x - cx) * cos - (y - cy) * sin + cx);
+            const ry = Math.round((x - cx) * sin + (y - cy) * cos + cy);
+            if (rx >= 0 && rx < sw && ry >= 0 && ry < sh && bin[ry * sw + rx]) {
+              sum++;
+            }
+          }
+          rowSums[y] = sum;
+        }
+        let mean = 0;
+        for (let y = 0; y < sh; y++) mean += rowSums[y];
+        mean /= sh;
+        let variance = 0;
+        for (let y = 0; y < sh; y++) variance += (rowSums[y] - mean) ** 2;
+        variance /= sh;
+        if (variance > bestScore) {
+          bestScore = variance;
+          bestAngle = angle;
+        }
+      }
+
+      // 如果检测到明显倾斜（>0.5°），旋转校正
+      if (Math.abs(bestAngle) > 0.5) {
+        const rad = -bestAngle * Math.PI / 180;
+        const rotated = document.createElement('canvas');
+        rotated.width = w;
+        rotated.height = h;
+        const rctx = rotated.getContext('2d');
+        rctx.fillStyle = 'white';
+        rctx.fillRect(0, 0, w, h);
+        rctx.translate(w / 2, h / 2);
+        rctx.rotate(rad);
+        rctx.drawImage(canvas, -w / 2, -h / 2);
+        ctx.clearRect(0, 0, w, h);
+        ctx.drawImage(rotated, 0, 0);
+      }
+
+      return bestAngle;
+    }
+
+    // 图片预处理：放大 + 自动纠偏 + 灰度化 + 对比度拉伸 + Sauvola自适应二值化
+    function preprocessImage(dataUrl, enhance) {
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+
+          // 放大图片：目标长边至少 2000px，最大放大 3 倍（OCR 对高分辨率图片识别更好）
+          let scale = 1;
+          const maxDim = Math.max(img.width, img.height);
+          if (maxDim < 2000) {
+            scale = Math.min(3, Math.ceil(2000 / maxDim));
+          }
+          canvas.width = img.width * scale;
+          canvas.height = img.height * scale;
+          ctx.imageSmoothingEnabled = true;
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+          if (enhance) {
+            // 第0步：自动纠偏（检测并校正倾斜角度）
+            deskewImage(canvas, ctx);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const w = canvas.width;
+            const h = canvas.height;
+            const n = w * h;
+
+            // ===== 第一步：灰度化 =====
+            const gray = new Uint8ClampedArray(n);
+            for (let i = 0, j = 0; i < data.length; i += 4, j++) {
+              gray[j] = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+            }
+
+            // ===== 第二步：对比度拉伸（直方图归一化）=====
+            // 找到有效灰度范围（忽略首尾 0.5% 像素以去除噪点干扰），拉伸到 0-255
+            const hist = new Array(256).fill(0);
+            for (let i = 0; i < n; i++) hist[gray[i]]++;
+            const cutoff = Math.floor(n * 0.005);
+            let lo = 0, hi = 255, cum = 0;
+            for (let i = 0; i < 256; i++) { cum += hist[i]; if (cum > cutoff) { lo = i; break; } }
+            cum = 0;
+            for (let i = 255; i >= 0; i--) { cum += hist[i]; if (cum > cutoff) { hi = i; break; } }
+            if (hi <= lo) { lo = 0; hi = 255; }
+            const range = hi - lo || 1;
+            for (let i = 0; i < n; i++) {
+              gray[i] = Math.max(0, Math.min(255, ((gray[i] - lo) * 255 / range) | 0));
+            }
+
+            // ===== 第三步：Sauvola 自适应阈值二值化 =====
+            // 对每个像素，根据局部窗口的均值和标准差计算阈值：
+            //   T = mean * (1 + k * (std / R - 1))
+            // 使用积分图（Summed Area Table）加速，复杂度 O(n)
+            const intW = w + 1;
+            const integral = new Float32Array(intW * (h + 1));
+            const integralSq = new Float32Array(intW * (h + 1));
+            for (let y = 0; y < h; y++) {
+              let rowSum = 0, rowSumSq = 0;
+              const rowBase = y * intW;
+              const nextRowBase = (y + 1) * intW;
+              for (let x = 0; x < w; x++) {
+                const val = gray[y * w + x];
+                rowSum += val;
+                rowSumSq += val * val;
+                integral[nextRowBase + x + 1] = integral[rowBase + x + 1] + rowSum;
+                integralSq[nextRowBase + x + 1] = integralSq[rowBase + x + 1] + rowSumSq;
+              }
+            }
+            // Sauvola 参数
+            const k = 0.2;
+            const R = 128;
+            // 窗口大小：图片短边的 1/15，限制在 15~51 之间，且为奇数
+            let winSize = Math.max(15, Math.min(51, Math.floor(Math.min(w, h) / 15)));
+            if (winSize % 2 === 0) winSize++;
+            const halfWin = (winSize - 1) >> 1;
+
+            for (let y = 0; y < h; y++) {
+              const y1 = Math.max(0, y - halfWin);
+              const y2 = Math.min(h - 1, y + halfWin);
+              const rowBase = y * w;
+              for (let x = 0; x < w; x++) {
+                const x1 = Math.max(0, x - halfWin);
+                const x2 = Math.min(w - 1, x + halfWin);
+                const aw = (x2 - x1 + 1) * (y2 - y1 + 1);
+                // 积分图查表：矩形区域 [x1..x2, y1..y2] 的和
+                const A = (y2 + 1) * intW + (x2 + 1);
+                const B = y1 * intW + (x2 + 1);
+                const C = (y2 + 1) * intW + x1;
+                const D = y1 * intW + x1;
+                const sum = integral[A] - integral[B] - integral[C] + integral[D];
+                const sumSq = integralSq[A] - integralSq[B] - integralSq[C] + integralSq[D];
+                const mean = sum / aw;
+                const variance = Math.max(0, sumSq / aw - mean * mean);
+                const std = Math.sqrt(variance);
+                const threshold = mean * (1 + k * (std / R - 1));
+                const val = gray[rowBase + x] < threshold ? 0 : 255;
+                const idx = (rowBase + x) << 2;
+                data[idx] = data[idx + 1] = data[idx + 2] = val;
+              }
+            }
+
+            // ===== 第四步：去除表格线 =====
+            // 水平线：某行超过 50% 像素是黑色 → 是表格横线，擦除
+            for (let y = 0; y < h; y++) {
+              let darkCount = 0;
+              const rowBase = y * w;
+              for (let x = 0; x < w; x++) {
+                if (data[(rowBase + x) << 2] === 0) darkCount++;
+              }
+              if (darkCount > w * 0.5) {
+                for (let x = 0; x < w; x++) {
+                  const idx = (rowBase + x) << 2;
+                  data[idx] = data[idx + 1] = data[idx + 2] = 255;
+                }
+              }
+            }
+            // 垂直线：某列超过 50% 像素是黑色 → 是表格竖线，擦除
+            for (let x = 0; x < w; x++) {
+              let darkCount = 0;
+              for (let y = 0; y < h; y++) {
+                if (data[(y * w + x) << 2] === 0) darkCount++;
+              }
+              if (darkCount > h * 0.5) {
+                for (let y = 0; y < h; y++) {
+                  const idx = (y * w + x) << 2;
+                  data[idx] = data[idx + 1] = data[idx + 2] = 255;
+                }
+              }
+            }
+
+            ctx.putImageData(imageData, 0, 0);
+          }
+
+          // 输出为 PNG（二值化图片用 PNG 更清晰，不产生压缩伪影）
+          resolve(canvas.toDataURL('image/png'));
+        };
+        img.src = dataUrl;
+      });
+    }
+
+    // 开始 OCR 识别
+    async function startOcr() {
+      if (!ocrImageDataUrl) {
+        showToast('请先选择图片');
+        return;
+      }
+
+      // 切换到识别中界面
+      document.getElementById('ocrStep1').classList.add('hidden');
+      document.getElementById('ocrCloseWrap').classList.add('hidden');
+      document.getElementById('ocrStep2').classList.remove('hidden');
+
+      const progressBar = document.getElementById('ocrProgressBar');
+      const progressText = document.getElementById('ocrProgressText');
+      let worker = null;
+
+      try {
+        // 第一步：图片预处理（Sauvola自适应二值化）
+        const enhance = document.getElementById('ocrEnhance').checked;
+        progressText.textContent = '正在优化图片...';
+        progressBar.style.width = '5%';
+        const processedImage = await preprocessImage(ocrImageDataUrl, enhance);
+
+        // 第二步：创建 Worker，加载中文+英文模型，调优参数
+        progressText.textContent = '正在加载识别引擎（中文+英文）...';
+        progressBar.style.width = '10%';
+
+        worker = await Tesseract.createWorker('chi_sim+eng', 1, {
+          logger: (m) => {
+            if (m.status === 'loading language traineddata') {
+              progressText.textContent = '正在加载识别模型...';
+              progressBar.style.width = '20%';
+            } else if (m.status === 'initializing api') {
+              progressText.textContent = '正在初始化引擎...';
+              progressBar.style.width = '35%';
+            } else if (m.status === 'recognizing text') {
+              const pct = 40 + Math.round(m.progress * 55);
+              progressBar.style.width = pct + '%';
+              progressText.textContent = `正在识别中... ${Math.round(m.progress * 100)}%`;
+            }
+          }
+        });
+
+        // 读取用户选择的识别模式（PSM）
+        const psmValue = parseInt(document.getElementById('ocrPsmMode').value);
+        const psmMap = {
+          3: Tesseract.PSM.AUTO,
+          4: Tesseract.PSM.SINGLE_COLUMN,
+          6: Tesseract.PSM.SINGLE_BLOCK,
+          11: Tesseract.PSM.SPARSE_TEXT,
+        };
+
+        // 设置关键参数提升识别率
+        await worker.setParameters({
+          // PSM 模式：根据名单类型选择（默认 6=统一文本块，4=单列名单）
+          tessedit_pageseg_mode: psmMap[psmValue] || Tesseract.PSM.SINGLE_BLOCK,
+          // 保留空格，有助于分隔姓名和电话
+          preserve_interword_spaces: '1',
+          // 告诉 Tesseract 图片 DPI，避免缩放误判
+          user_defined_dpi: '300',
+        });
+
+        // 第三步：执行识别
+        const { data } = await worker.recognize(processedImage);
+
+        progressBar.style.width = '100%';
+        progressText.textContent = '识别完成，正在智能分类...';
+
+        // 保存原始文本
+        const rawText = data.text || '';
+        document.getElementById('ocrRawText').value = rawText;
+
+        // 智能分类
+        const categorized = categorizeText(rawText);
+        document.getElementById('catNames').value = categorized.studentNames.join('\n');
+        document.getElementById('catSalesNames').value = categorized.salesNames.join('\n');
+        document.getElementById('catPhones').value = categorized.phones.join('\n');
+        document.getElementById('catOthers').value = categorized.others.join('\n');
+        updateCategoryCounts();
+
+        // 智能配对提示（学员姓名与电话配对）
+        if (categorized.studentNames.length > 0 && categorized.studentNames.length === categorized.phones.length) {
+          document.getElementById('pairHint').classList.remove('hidden');
+        } else {
+          document.getElementById('pairHint').classList.add('hidden');
+        }
+
+        // 切换到第三步
+        setTimeout(() => {
+          document.getElementById('ocrStep2').classList.add('hidden');
+          document.getElementById('ocrStep3').classList.remove('hidden');
+        }, 400);
+
+      } catch (err) {
+        console.error('OCR识别失败:', err);
+        showToast('识别失败，请重试或换一张更清晰的照片');
+        resetOcr();
+      } finally {
+        // 释放 Worker 资源
+        if (worker) {
+          try { await worker.terminate(); } catch (e) {}
+        }
+      }
+    }
+
+    // 展开/收起原始文本
+    function toggleRawText() {
+      const textarea = document.getElementById('ocrRawText');
+      const arrow = document.getElementById('rawTextArrow');
+      textarea.classList.toggle('hidden');
+      arrow.classList.toggle('rotate-90');
+    }
+
+    // 智能分类：把 OCR 原始文本分成 学员姓名 / 销售姓名 / 电话 / 其他
+    function categorizeText(rawText) {
+      const studentNames = [];
+      const salesNames = [];
+      const phones = [];
+      const others = [];
+
+      // 常见姓氏（百家姓）
+      const surnames = '赵钱孙李周吴郑王冯陈褚卫蒋沈韩杨朱秦尤许何吕施张孔曹严华金魏陶姜戚谢邹喻柏水窦章云苏潘葛奚范彭郎鲁韦昌马苗凤花方俞任袁柳鲍史唐费廉岑薛雷贺倪汤滕殷罗毕郝邬安常乐于时傅皮卞齐康伍余元卜顾孟平黄和穆萧尹姚邵湛汪祁毛禹狄米贝明臧计伏成戴谈宋茅庞熊纪舒屈项祝董梁杜阮蓝闵席季麻强贾路娄危江童颜郭梅盛林刁锺徐邱骆高夏蔡田樊胡凌霍虞万支柯昝管卢莫经房裘缪干解应宗丁宣贲邓郁单杭洪包诸左石崔吉钮龚程嵇邢滑裴陆荣翁荀羊於惠甄曲家封芮羿储靳汲邴糜松井段富巫乌焦巴弓牧隗山谷车侯宓蓬全郗班仰秋仲伊宫宁仇栾暴甘钭厉戎祖武符刘景詹束龙叶幸司韶郜黎蓟薄印宿白怀蒲邰从鄂索咸籍赖卓蔺屠蒙池乔阴鬱胥能苍双闻莘党翟谭贡劳逄姬申扶堵冉宰郦雍却璩桑桂濮牛寿通边扈燕冀郏浦尚农温别庄晏柴瞿阎充慕连茹习宦艾鱼容向古易慎戈廖庾终暨居衡步都耿满弘匡国文寇广禄阙东欧殳沃利蔚越夔隆师巩厍聂晁勾敖融冷訾辛阚那简饶空曾毋沙乜养鞠须丰巢关蒯相查后荆红游竺权逯盖益桓公';
+
+      // 销售人员关键词：出现这些词的行，其中的姓名归为"销售姓名"
+      const salesKeywords = ['销售', '顾问', '课程顾问', '招生', '客服', '经理', '主管', '总监', '接待', '介绍人', '推荐人', '经办人', '咨询师', '报名老师', '专属', '专属顾问', '学管', '学管师', '班主任', '负责老师', '负责教练', '联系人'];
+
+      // 非姓名关键词（出现这些词的候选不作为姓名）
+      const stopWords = ['姓名','名单','班级','序号','编号','电话','手机','家长','教练','日期','时间','签字','签名','备注','说明','注意','学校','游泳','培训','课程','课时','费用','金额','合计','页码','学生','学员','报名','登记','表','第','共','总计','人数','地址','备注','性别','男','女','出生','年龄','年级','周一','周二','周三','周四','周五','周六','周日','星期','上午','下午','晚上'];
+
+      const lines = rawText.split('\n');
+
+      // 清理函数：去掉序号前缀、标点等
+      function cleanLine(text) {
+        text = text.replace(/^[\d]+[.、)]\s*/, '');
+        text = text.replace(/^\(\d+\)\s*/, '');
+        text = text.replace(/^[①②③④⑤⑥⑦⑧⑨⑩⑪⑫]\s*/, '');
+        text = text.replace(/^[\s·•・\-_|│┃]+/, '').trim();
+        return text;
+      }
+
+      // 姓名校验：2-4个中文字、首字是常见姓氏、不含停用词
+      function isValidName(candidate) {
+        if (!candidate || candidate.length < 2 || candidate.length > 4) return false;
+        if (!/^[\u4e00-\u9fa5]+$/.test(candidate)) return false;
+        if (!surnames.includes(candidate[0])) return false;
+        if (stopWords.some(w => candidate.includes(w))) return false;
+        // 排除全是相同字的（如"人人人"，OCR 常见误识别）
+        if (candidate.length >= 3 && candidate.split('').every(c => c === candidate[0])) return false;
+        return true;
+      }
+
+      lines.forEach(line => {
+        let text = line.trim();
+        if (!text) return;
+        text = cleanLine(text);
+        if (!text) return;
+
+        // 检测当前行是否包含销售人员关键词
+        let isSalesLine = salesKeywords.some(kw => text.includes(kw));
+
+        // 检测是否是表头行（含时间格式 如 8:50-9:50、10:10-11:10）
+        // 表头行里的姓名是教练/销售，不是学员
+        const hasTimePattern = /\d{1,2}[:：]\d{2}\s*[-—~至]\s*\d{1,2}[:：]\d{2}/.test(text)
+          || /[一二三四五六七八九十]+期/.test(text);
+        if (hasTimePattern) isSalesLine = true;
+
+        // 提取电话号码：11位手机号 或 带区号座机
+        const phoneMatches = text.match(/1[3-9]\d{9}/g);
+        if (phoneMatches) {
+          phoneMatches.forEach(p => { if (!phones.includes(p)) phones.push(p); });
+        }
+        const landlineMatches = text.match(/\d{3,4}[-\s]?\d{7,8}/g);
+        if (landlineMatches) {
+          landlineMatches.forEach(p => {
+            const clean = p.replace(/\s/g, '');
+            if (clean.length >= 10 && !phones.includes(clean)) phones.push(clean);
+          });
+        }
+
+        // 去掉电话号码、时间、数字后，提取剩余文本
+        let remaining = text
+          .replace(/1[3-9]\d{9}/g, '')
+          .replace(/\d{3,4}[-\s]?\d{7,8}/g, '')
+          .replace(/\d{1,2}[:：]\d{2}\s*[-—~至]\s*\d{1,2}[:：]\d{2}/g, '')
+          .replace(/\d+/g, '')
+          .replace(/\s+/g, '')
+          .trim();
+
+        if (!remaining) return;
+
+        // 如果是销售行/表头行，去掉关键词和标点，剩余部分作为销售姓名候选
+        if (isSalesLine) {
+          salesKeywords.forEach(kw => {
+            remaining = remaining.replace(new RegExp(kw, 'g'), '');
+          });
+          // 去掉表头常见字：期、班、第、中文数字
+          remaining = remaining.replace(/[：:：,，;；\-\|│┃期班第一二三四五六七八九十]/g, '').trim();
+        }
+
+        if (!remaining) return;
+
+        // 提取连续的 2-4 个中文字符作为姓名候选
+        const cnMatches = remaining.match(/[\u4e00-\u9fa5]{2,4}/g);
+        if (cnMatches) {
+          cnMatches.forEach(candidate => {
+            if (isValidName(candidate)) {
+              if (isSalesLine) {
+                if (!salesNames.includes(candidate)) salesNames.push(candidate);
+              } else {
+                if (!studentNames.includes(candidate)) studentNames.push(candidate);
+              }
+            } else {
+              // 不是姓名，归到其他
+              if (!others.includes(candidate)) others.push(candidate);
+            }
+          });
+        } else if (!isSalesLine) {
+          // 纯数字或其他非中文内容
+          if (!others.includes(text)) others.push(text);
+        }
+
+        // 销售行/表头行额外处理：检测单字姓氏（如"1班宗"中的"宗"）
+        if (isSalesLine) {
+          const singleChars = remaining.match(/[\u4e00-\u9fa5]/g);
+          if (singleChars) {
+            singleChars.forEach(ch => {
+              if (surnames.includes(ch) && !salesNames.includes(ch)
+                && !stopWords.some(w => w.includes(ch))) {
+                salesNames.push(ch);
+              }
+            });
+          }
+        }
+      });
+
+      return { studentNames, salesNames, phones, others };
+    }
+
+    // 更新分类计数
+    function updateCategoryCounts() {
+      const names = document.getElementById('catNames').value.trim().split('\n').filter(l => l.trim());
+      const salesNames = document.getElementById('catSalesNames').value.trim().split('\n').filter(l => l.trim());
+      const phones = document.getElementById('catPhones').value.trim().split('\n').filter(l => l.trim());
+      const others = document.getElementById('catOthers').value.trim().split('\n').filter(l => l.trim());
+      document.getElementById('catNameCount').textContent = `${names.length} 个`;
+      document.getElementById('catSalesNameCount').textContent = `${salesNames.length} 个`;
+      document.getElementById('catPhoneCount').textContent = `${phones.length} 个`;
+      document.getElementById('catOtherCount').textContent = `${others.length} 行`;
+
+      // 配对提示（学员姓名与电话配对）
+      if (names.length > 0 && names.length === phones.length) {
+        document.getElementById('pairHint').classList.remove('hidden');
+      } else {
+        document.getElementById('pairHint').classList.add('hidden');
+      }
+    }
+
+    // 批量导入识别到的学员
+    async function batchImport() {
+      // 从分类框读取姓名和电话
+      const nameText = document.getElementById('catNames').value.trim();
+      const phoneText = document.getElementById('catPhones').value.trim();
+
+      if (!nameText) {
+        showToast('没有可导入的姓名');
+        return;
+      }
+
+      const classNo = document.getElementById('ocrClassNo').value.trim();
+      const coachName = document.getElementById('ocrCoachName').value.trim();
+      if (!classNo || !coachName) {
+        showToast('请填写班级编号和授课教练');
+        return;
+      }
+
+      const classTime = document.getElementById('ocrClassTime').value.trim();
+      const totalHours = Number(document.getElementById('ocrTotalHours').value) || 0;
+      const defaultPhone = document.getElementById('ocrParentPhone').value.trim();
+
+      // 解析姓名和电话（每行一个）
+      const names = nameText.split('\n').map(l => l.trim()).filter(l => l.length >= 2);
+      const phones = phoneText.split('\n').map(l => l.trim()).filter(l => l.length >= 7);
+
+      if (names.length === 0) {
+        showToast('没有有效的姓名');
+        return;
+      }
+
+      // 构造批量数据（姓名和电话按顺序配对）
+      const batchData = names.map((name, idx) => {
+        const phone = (idx < phones.length ? phones[idx] : '') || defaultPhone;
+        return {
+          classTime: classTime,
+          classNo: classNo,
+          studentName: name,
+          parentPhone: phone,
+          coachName: coachName,
+          totalHours: totalHours,
+          usedHours: 0,
+        };
+      });
+
+      try {
+        showLoading(true);
+        // 调用飞书批量创建接口
+        const resp = await fetch(`${API_URL}?batch=true`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(batchData),
+        });
+        const result = await resp.json();
+        if (!result.ok) throw new Error(result.error);
+        // 将新创建的记录追加到本地数组
+        const newRecords = result.data || [];
+        students = students.concat(newRecords);
+        render();
+        closeOcrModal();
+        showToast(`成功导入 ${newRecords.length} 名学员`);
+      } catch (err) {
+        console.error('批量导入失败:', err);
+        showToast('批量导入失败: ' + err.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    /* ---------- 工具函数 ---------- */
+
+    // 轻提示（自动消失）
+    let toastTimer = null;
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.remove('hidden');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => toast.classList.add('hidden'), 2200);
+    }
+
+    // HTML 转义，防止内容含特殊字符导致显示异常
+    function escapeHtml(str) {
+      if (str == null) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+    }
+
+    /* ---------- 事件绑定与初始化 ---------- */
+
+    // 筛选/搜索变化时重新渲染
+    document.getElementById('filterClass').addEventListener('change', render);
+    document.getElementById('searchName').addEventListener('input', render);
+
+    // OCR 分类框编辑时实时更新计数
+    document.getElementById('catNames').addEventListener('input', updateCategoryCounts);
+    document.getElementById('catSalesNames').addEventListener('input', updateCategoryCounts);
+    document.getElementById('catPhones').addEventListener('input', updateCategoryCounts);
+    document.getElementById('catOthers').addEventListener('input', updateCategoryCounts);
+
+    // 按 ESC 关闭弹窗
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        closeModal();
+        closeSalaryModal();
+        closeOcrModal();
+      }
+    });
+
+    // 初始化：从飞书云端读取数据（loadData 内部会在加载完成后自动 render）
+    loadData();
+  </script>
+</body>
+</html>
